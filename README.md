@@ -8,7 +8,7 @@ The questions:
 2. Do larger households split their basket differently from smaller ones across the year?
 3. Do promotions push shoppers toward private-label (store-brand) products?
 
-**Timeline:** analysis and R Markdown charts completed in Summer 2026. Published here in November 2026.
+**Timeline:** original Week 5 lab completed in Summer 2026. Charts corrected and published here in November 2026 (see [Data notes](#data-notes)).
 
 ## 1. Promotion dependence is driven by department, not income
 
