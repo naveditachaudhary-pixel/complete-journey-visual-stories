@@ -8,6 +8,8 @@ The questions:
 2. Do larger households split their basket differently from smaller ones across the year?
 3. Do promotions push shoppers toward private-label (store-brand) products?
 
+**Timeline:** analysis and R Markdown charts completed in Summer 2026. Published here in November 2026.
+
 ## 1. Promotion dependence is driven by department, not income
 
 ![Heatmap of the share of spend bought on promotion, by income bracket and department. Fuel is mostly bought on promotion in every bracket; floral and produce rarely are. Rows are fairly uniform across income.](docs/plot1.png)
