@@ -1,6 +1,6 @@
 # Complete Journey: Three Visual Stories
 
-Three charts on grocery shopping behaviour, built in R with the tidyverse and ggplot2. They use **The Complete Journey**, a public dataset from 84.51° with a year of transactions (1.47 million line items) from 801 households that also have demographic data.
+Three charts on grocery shopping behaviour, built in R with the tidyverse and ggplot2. They use **The Complete Journey**, a public dataset from 84.51° with a year of grocery transactions (1.47 million line items from 2,469 households). The charts compare income and household size, so they use the 801 households that have demographic data: about 829,000 transactions.
 
 The questions:
 
