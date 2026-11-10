@@ -1,0 +1,179 @@
+---
+title: 'Complete Journey: Three Visual Stories'
+output:
+  html_notebook:
+    toc: false
+    number_sections: false
+    df_print: paged
+  html_document:
+    toc: false
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(forcats)
+library(completejourney)
+
+transactions <- get_transactions()
+products     <- products
+
+if ("demographics" %in% ls("package:completejourney")) {
+  demographics <- demographics
+} else {
+  demographics <- households
+}
+
+transactions <- transactions %>%
+  mutate(
+    on_promo = (retail_disc + coupon_disc + coupon_match_disc) > 0,  # discounts are stored as positive amounts
+    tx_time  = suppressWarnings(ymd_hms(transaction_timestamp, quiet = TRUE)),
+    tx_time  = if_else(is.na(tx_time), as_datetime(ymd("2017-01-01") + weeks(week - 1)), tx_time),
+    month    = floor_date(tx_time, "month"),
+    dow      = wday(tx_time, label = TRUE, week_start = 1)
+  )
+
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      panel.grid.minor = element_blank()
+    )
+)
+```
+
+---
+
+# Plot 1 – Promotions by Income and Department
+
+```{r plot1, fig.width=10, fig.height=6}
+top_depts <- transactions %>%
+  inner_join(products, by = "product_id") %>%
+  count(department, wt = sales_value, sort = TRUE) %>%
+  slice_head(n = 12) %>%
+  pull(department)
+
+p1_df <- transactions %>%
+  inner_join(products,     by = "product_id") %>%
+  inner_join(demographics, by = "household_id") %>%
+  filter(!is.na(income), department %in% top_depts) %>%
+  group_by(income, department) %>%
+  summarise(
+    spend_total = sum(sales_value, na.rm = TRUE),
+    spend_promo = sum(if_else(on_promo, sales_value, 0), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(promo_share = spend_promo / spend_total) %>%
+  filter(is.finite(promo_share))
+
+ggplot(p1_df, aes(x = income,
+                  y = fct_reorder(department, promo_share, .fun = median),
+                  fill = promo_share)) +
+  geom_tile(color = "white", linewidth = 0.25) +
+  scale_fill_gradient(labels = percent_format(accuracy = 1),
+                      limits = c(0, NA),
+                      name = "Share of Spend\nOn Promotion") +
+  labs(
+    title = "Promotion Dependence Is Driven by Department More Than Income",
+    subtitle = "Share of household spend purchased on any promotion (retail or coupon).\nTop 12 departments by total revenue.",
+    x = "Household Income Bracket",
+    y = "Product Department",
+    caption = "Data: completejourney"
+  ) +
+  coord_fixed() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+---
+
+# Plot 2 – Larger vs Smaller Households Across the Year
+
+```{r plot2, fig.width=11, fig.height=7}
+top_family_depts <- transactions %>%
+  inner_join(products, by = "product_id") %>%
+  count(department, wt = sales_value, sort = TRUE) %>%
+  slice_head(n = 4) %>%
+  pull(department)
+
+p2_df <- transactions %>%
+  inner_join(products,     by = "product_id") %>%
+  inner_join(demographics, by = "household_id") %>%
+  mutate(hh_size_group = if_else(household_size >= 3, "3+ people", "1–2 people"),
+         department = if_else(department %in% top_family_depts, department, NA_character_)) %>%
+  # denominator: each group's own monthly spend across ALL departments,
+  # so the lines compare how each group splits its basket
+  group_by(month, hh_size_group) %>%
+  mutate(month_spend_all = sum(sales_value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(!is.na(department)) %>%
+  group_by(month, hh_size_group, department) %>%
+  summarise(spend = sum(sales_value, na.rm = TRUE),
+            month_spend_all = first(month_spend_all),
+            .groups = "drop") %>%
+  mutate(share = spend / month_spend_all)
+
+ggplot(p2_df, aes(month, share, color = hh_size_group)) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~ department, nrow = 2, scales = "free_y") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 0.1)) +
+  labs(
+    title = "Larger and Smaller Households Split Their Spend Almost the Same Way",
+    subtitle = "Monthly share of each group's own spend going to the top 4 departments.\nSeasonal swings, like summer fuel, show up in both groups.",
+    x = "Month",
+    y = "Share of Monthly Spend",
+    color = NULL,
+    caption = "Data: completejourney"
+  )
+```
+
+---
+
+# Plot 3 – Promotions and Private Label
+
+```{r plot3, fig.width=9, fig.height=6}
+p3_df <- transactions %>%
+  inner_join(products,     by = "product_id") %>%
+  inner_join(demographics, by = "household_id") %>%
+  filter(!is.na(income), !is.na(brand)) %>%
+  mutate(is_private = str_to_lower(brand) == "private",
+         promo_label = if_else(on_promo, "On promotion", "Not on promotion")) %>%
+  group_by(income, promo_label) %>%
+  summarise(
+    private_spend = sum(if_else(is_private, sales_value, 0), na.rm = TRUE),
+    total_spend   = sum(sales_value, na.rm = TRUE),
+    private_share = private_spend / total_spend,
+    .groups = "drop"
+  ) %>%
+  pivot_wider(id_cols = income, names_from = promo_label, values_from = private_share)
+
+if (!"On promotion" %in% colnames(p3_df)) {
+  p3_df <- p3_df %>% mutate(`On promotion` = 0)
+}
+
+if (!"Not on promotion" %in% colnames(p3_df)) {
+  p3_df <- p3_df %>% mutate(`Not on promotion` = 0)
+}
+
+ggplot(p3_df,
+       aes(y = income)) +
+  geom_segment(aes(x = `Not on promotion`, xend = `On promotion`, yend = income),
+               linewidth = 1) +
+  geom_point(aes(x = `Not on promotion`), size = 3, color = "steelblue") +
+  geom_point(aes(x = `On promotion`), size = 3, color = "darkred") +
+  scale_x_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
+  labs(
+    title = "Promotions Raise the Private-Label Share in Every Income Bracket",
+    subtitle = "Private-label share of spend: blue = items NOT on promotion, red = items ON promotion.\nLower-income households already buy the most private label at full price, so promotions shift them least.",
+    x = "Private-Label Share of Spend",
+    y = "Household Income Bracket",
+    caption = "Data: completejourney"
+  )
+```
+
+
+
